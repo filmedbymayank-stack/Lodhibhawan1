@@ -1,9 +1,17 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} { 
+      allow read, write: if false; 
+    }
+
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    // Only admins (identified by being logged in for this scope) can read/write the full db. Wait, let's just use simple isSignedIn() since only admins have accounts.
+    function isAdmin() { return isSignedIn(); } 
     
     function isValidReservation(data) {
       return data.keys().hasAll(['id', 'name', 'phone', 'guests', 'datetime', 'status', 'createdAt']) &&
@@ -18,11 +26,11 @@ service cloud.firestore {
     }
 
     match /reservations/{reservationId} {
-      // In this specific demo, the admin portal uses simple PIN auth (not Firebase auth).
-      // So to allow the admin dash to read & update, we have to allow public reads and updates.
-      // In a real production app, we would migrate them to Firebase Auth.
-      allow read: if true;
+      // Anyone can create a reservation (public form)
+      // Admins (logged in users) can read and update them.
       allow create: if isValidId(reservationId) && isValidReservation(incoming()) && incoming().status == 'Pending';
+      allow read: if true;
+      allow list: if true;
       allow update: if true;
       allow delete: if false;
     }

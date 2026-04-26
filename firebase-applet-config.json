@@ -1,10 +1,10 @@
 {
-  "projectId": "lodhi1-ba679",
-  "appId": "1:652981778950:web:27c2be7724ade5a3506187",
-  "apiKey": "AIzaSyAT0pvOaemJm4fMESp2qe25g_ztNOik9AQ",
-  "authDomain": "lodhi1-ba679.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
-  "storageBucket": "lodhi1-ba679.firebasestorage.app",
-  "messagingSenderId": "652981778950",
-  "measurementId": "G-Z2SVTCCPXQ"
+  "projectId": "gen-lang-client-0626571328",
+  "appId": "1:501852784260:web:ac1c46fea1493e0e8364d1",
+  "apiKey": "AIzaSyBcJDgxXcwd15NC22Y-oZa3SiSVqAZDWt8",
+  "authDomain": "gen-lang-client-0626571328.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-75d4a139-d710-4860-94c8-d3ef627f01f3",
+  "storageBucket": "gen-lang-client-0626571328.firebasestorage.app",
+  "messagingSenderId": "501852784260",
+  "measurementId": ""
 }
