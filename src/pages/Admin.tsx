@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { ChevronLeft, CheckCircle2, XCircle, Clock, Filter, Phone, User, Calendar, MessageSquare, LogOut, Settings, Edit3, KeyRound, MoreVertical } from 'lucide-react';
 import { ReservationData } from '../types';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
@@ -18,7 +18,6 @@ const TABLES = [
 ];
 
 export default function Admin() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
@@ -28,8 +27,7 @@ export default function Admin() {
   const [currentAdminPin, setCurrentAdminPin] = useState(() => localStorage.getItem('adminPin') || '4567');
 
   const [reservations, setReservations] = useState<ReservationData[]>([]);
-  const activeTab = (searchParams.get('tab') as 'reservations' | 'upcoming' | 'tables' | 'settings') || 'reservations';
-  const setActiveTab = (tab: string) => setSearchParams({ tab });
+  const [activeTab, setActiveTab] = useState<'reservations' | 'upcoming' | 'tables' | 'settings'>('reservations');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Confirmed' | 'Cancelled'>('All');
   const [upcomingDateFilter, setUpcomingDateFilter] = useState(() => {
     const today = new Date();
@@ -54,6 +52,22 @@ export default function Admin() {
   
   // View Table state
   const [viewTableDetailsId, setViewTableDetailsId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Trap the physical back button to keep user in admin dashboard when authenticated
+    if (isAuthenticated) {
+      window.history.pushState(null, '', window.location.href);
+      const handlePopState = () => {
+        window.history.pushState(null, '', window.location.href);
+        // We can close modals to simulate back button
+        setAllocationStep('none');
+        setSelectedResReject(null);
+        setViewTableDetailsId(null);
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     // Check if previously logged in
@@ -1022,4 +1036,4 @@ Lodhi Bhawan Team`;
 
     </div>
   );
-                                                                }
+    }
