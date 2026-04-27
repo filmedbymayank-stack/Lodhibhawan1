@@ -24,6 +24,12 @@ export default function Reservation() {
     }
 
     const selectedDate = new Date(datetime);
+    const minAllowedTime = new Date(Date.now() + 15 * 60000);
+    if (selectedDate < minAllowedTime) {
+      alert("Reservations must be made at least 15 minutes in advance.");
+      return;
+    }
+
     const hour = selectedDate.getHours();
     const min = selectedDate.getMinutes();
 
@@ -242,4 +248,4 @@ export default function Reservation() {
       </AnimatePresence>
     </section>
   );
-}
+                }
