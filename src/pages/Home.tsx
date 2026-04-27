@@ -11,7 +11,9 @@ import Reservation from '../components/Reservation';
 import Footer from '../components/Footer';
 
 export default function Home() {
-  const [introComplete, setIntroComplete] = useState(false);
+  const [introComplete, setIntroComplete] = useState(() => {
+    return sessionStorage.getItem('introComplete') === 'true';
+  });
   const [pendingHash, setPendingHash] = useState('');
   const location = useLocation();
 
@@ -23,10 +25,9 @@ export default function Home() {
     window.scrollTo(0, 0);
 
     const hash = location.hash || window.location.hash;
-    if (hash) {
+    // Don't intercept Router's own hash (like #/, #/admin) when using HashRouter
+    if (hash && hash !== '#/' && !hash.startsWith('#/')) {
       setPendingHash(hash);
-      // Strip hash to prevent immediate browser jumping over the splash screen
-      window.history.replaceState(null, '', window.location.pathname);
     }
   }, [location.hash]);
 
@@ -37,7 +38,6 @@ export default function Home() {
         // Delay briefly to ensure sections are explicitly rendered
         setTimeout(() => {
           element.scrollIntoView({ behavior: 'smooth' });
-          window.history.replaceState(null, '', window.location.pathname + pendingHash);
         }, 150);
       }
     }
@@ -46,6 +46,7 @@ export default function Home() {
   // Use a callback to prevent IntroScreen from remounting or resetting the timer 
   const handleIntroComplete = useCallback(() => {
     setIntroComplete(true);
+    sessionStorage.setItem('introComplete', 'true');
   }, []);
 
   return (
