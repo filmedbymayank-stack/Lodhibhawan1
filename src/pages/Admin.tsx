@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, CheckCircle2, XCircle, Clock, Filter, Phone, User, Calendar, MessageSquare, LogOut, Settings, Edit3, KeyRound, MoreVertical } from 'lucide-react';
 import { ReservationData } from '../types';
 import { auth, db, handleFirestoreError, OperationType } from '../firebase';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 // 3 simple tables on left, 2 sofa right, 1 simple right
 const TABLES = [
@@ -18,6 +18,7 @@ const TABLES = [
 ];
 
 export default function Admin() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
@@ -27,7 +28,8 @@ export default function Admin() {
   const [currentAdminPin, setCurrentAdminPin] = useState(() => localStorage.getItem('adminPin') || '4567');
 
   const [reservations, setReservations] = useState<ReservationData[]>([]);
-  const [activeTab, setActiveTab] = useState<'reservations' | 'upcoming' | 'tables' | 'settings'>('reservations');
+  const activeTab = (searchParams.get('tab') as 'reservations' | 'upcoming' | 'tables' | 'settings') || 'reservations';
+  const setActiveTab = (tab: string) => setSearchParams({ tab });
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Confirmed' | 'Cancelled'>('All');
   const [upcomingDateFilter, setUpcomingDateFilter] = useState(() => {
     const today = new Date();
@@ -171,7 +173,7 @@ export default function Admin() {
     const timeString = dateObj.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
     const dateStr = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     
-    const text = `Reservation Confirmed — We Look Forward to Welcoming You 
+    const text = `Reservation Confirmed â€” We Look Forward to Welcoming You 
 
 Dear ${allocatingRes.name},
 
@@ -181,7 +183,7 @@ We are pleased to confirm your reservation at *Lodhi Bhawan*. Below are your boo
 *Time*: ${timeString}
 *Table*: ${pendingTableSelection}
 
-Kindly arrive 5–10 minutes prior to your scheduled time to ensure a seamless experience. Should you need to make any changes to your reservation, feel free to contact us in advance.
+Kindly arrive 5â€“10 minutes prior to your scheduled time to ensure a seamless experience. Should you need to make any changes to your reservation, feel free to contact us in advance.
 
 We look forward to offering you an exceptional dining experience.
 
@@ -229,7 +231,7 @@ Lodhi Bhawan Team`;
     const dateObj = new Date(res.datetime);
     const timeString = dateObj.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
     
-    const text = ` A Gentle Reminder — Your Reservation Today 
+    const text = ` A Gentle Reminder â€” Your Reservation Today 
 
 Dear ${res.name},
 
@@ -686,7 +688,7 @@ Lodhi Bhawan Team`;
                  <div className="mb-6 bg-primary/10 border border-primary/30 p-4 rounded flex flex-col md:flex-row justify-between items-center gap-4">
                     <div>
                         <p className="text-primary font-serif text-lg">Allocating Table for {allocatingRes.name}</p>
-                        <p className="text-secondary/70 text-sm">{allocatingRes.guests} Guests • {new Date(allocatingRes.datetime).toLocaleString('en-IN')}</p>
+                        <p className="text-secondary/70 text-sm">{allocatingRes.guests} Guests â€¢ {new Date(allocatingRes.datetime).toLocaleString('en-IN')}</p>
                     </div>
                     <button 
                       onClick={cancelAllocationProcess}
@@ -777,6 +779,23 @@ Lodhi Bhawan Team`;
                        Update PIN
                     </button>
                  </form>
+                  <button 
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to completely wipe out ALL reservations? This cannot be undone.')) {
+                        try {
+                          reservations.forEach(async (r) => {
+                            await deleteDoc(doc(db, 'reservations', r.id));
+                          });
+                          alert('All reservations have been cleared.');
+                        } catch(e) {
+                          alert('Failed to clear reservations');
+                        }
+                      }
+                    }}
+                    className="bg-red-900/50 border border-red-500/50 text-red-200 py-3 px-6 uppercase tracking-widest text-sm hover:bg-red-800 transition-colors w-full sm:w-auto"
+                  >
+                     Clear All Reservations
+                  </button>
                </div>
             </div>
           )}
@@ -1003,4 +1022,4 @@ Lodhi Bhawan Team`;
 
     </div>
   );
-}
+                                                                }
