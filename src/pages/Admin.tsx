@@ -88,7 +88,7 @@ export default function Admin() {
   
   // Clear Reservations State
   const [showClearModal, setShowClearModal] = useState(false);
-  const [clearType, setClearType] = useState<'All Reservations' | 'Upcoming' | 'Reached' | null>(null);
+  const [clearType, setClearType] = useState<'All Reservations' | 'Upcoming' | 'Reached' | 'History' | null>(null);
   
   // Rejection modal
   const [selectedResReject, setSelectedResReject] = useState<ReservationData | null>(null);
@@ -402,6 +402,10 @@ export default function Admin() {
         reservations.filter(r => r.status === 'Reached' || (r.status === 'Confirmed' && r.tableNo)).forEach(async (r) => {
           await deleteDoc(doc(db, 'reservations', r.id));
         });
+      } else if (clearType === 'History') {
+        reservations.filter(r => r.status === 'Completed' || r.status === 'Cancelled' || r.status === 'DidntReach').forEach(async (r) => {
+          await deleteDoc(doc(db, 'reservations', r.id));
+        });
       }
       setShowClearModal(false);
       setClearType(null);
@@ -706,7 +710,8 @@ export default function Admin() {
                 {filteredReservations.length === 0 && !fetchError ? (
                   <p className="text-secondary/50 font-light mt-8">No reservations found.</p>
                 ) : (
-                  filteredReservations.map(res => (
+                  filteredReservations.map(res => {
+                    return (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -752,7 +757,7 @@ export default function Admin() {
                         </div>
                       </div>
 
-                      {res.status === 'Pending' && (
+                       {res.status === 'Pending' && (
                         <div className="flex flex-row md:flex-row gap-2 shrink-0 border-t border-primary/10 p-2 bg-darker/50">
                           <button 
                             onClick={() => updateReservationStatus(res.id, { status: 'Confirmed' })}
@@ -769,7 +774,8 @@ export default function Admin() {
                         </div>
                       )}
                     </motion.div>
-                  ))
+                    );
+                  })
                 )}
               </div>
               <button 
@@ -835,9 +841,7 @@ export default function Admin() {
                                     res.status === 'Cancelled' || res.status === 'DidntReach' ? 'bg-[#E2725B]/10 text-[#E2725B] border-[#E2725B]/20' :
                                     'bg-[#CCCCFF]/10 text-[#CCCCFF] border-[#CCCCFF]/20';
 
-                    if (diffTime < 0) {
-                      urgencyClass = 'bg-red-900/10 border-red-500/30';
-                    } else if (diffTime <= 30 * 60 * 1000) {
+                    if (diffTime <= 30 * 60 * 1000) {
                       urgencyClass = 'bg-amber-900/10 border-amber-500/30';
                     } else if (diffTime <= 60 * 60 * 1000) {
                        urgencyClass = 'bg-yellow-900/10 border-yellow-500/20';
@@ -848,7 +852,7 @@ export default function Admin() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         key={res.id} 
-                        className={`bg-dark border flex flex-col relative flex-wrap ${ res.status === 'Confirmed' ? 'border-[#8A9A5B]/50' : res.status === 'Completed' ? 'border-[#E6D7A3]/50' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'border-[#E2725B]/50' : res.status === 'Reached' ? 'border-[#CD7F32]/50' : res.status === 'SuggestedNewTime' ? 'border-[#FF9933]/50' : 'border-[#CCCCFF]/50' } ${openMenuId === res.id ? 'z-50' : 'z-10'}`}
+                        className={`bg-dark border flex flex-col relative flex-wrap ${ res.status === 'Confirmed' ? 'border-[#8A9A5B]/50' : res.status === 'Completed' ? 'border-[#E6D7A3]/50' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'border-[#E2725B]/50' : res.status === 'Reached' ? 'border-[#CD7F32]/50' : res.status === 'SuggestedNewTime' ? 'border-[#FF9933]/50' : 'border-[#CCCCFF]/50' } ${openMenuId === res.id ? 'z-50' : 'z-10'} ${urgencyClass}`}
                       >
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${indicatorColor}`}></div>
                         
@@ -944,7 +948,8 @@ export default function Admin() {
                      return <p className="text-secondary/50 font-light mt-8">No reached reservations found.</p>;
                   }
 
-                  return reachedFiltered.map(res => (
+                  return reachedFiltered.map(res => {
+                    return (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -1048,8 +1053,9 @@ export default function Admin() {
                         </div>
                       </div>
                     </motion.div>
-                  ));
-                })()}
+                  );
+                });
+              })()}
               </div>
             </div>
           )}
@@ -1203,14 +1209,23 @@ export default function Admin() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs uppercase tracking-widest text-secondary/60">Mobile Number</label>
-                  <input 
-                    type="tel" 
-                    required pattern="[0-9]{10}" maxLength={10} 
-                    value={manualRes.phone}
-                    onChange={(e) => setManualRes(prev => ({ ...prev, phone: e.target.value }))}
-                    className="w-full bg-darker border border-primary/20 px-4 py-3 text-secondary focus:outline-none focus:border-primary/50 transition-colors" 
-                    placeholder="Phone Number"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 bottom-3.5 text-secondary/40 font-mono text-sm">+91 </span>
+                    <input 
+                      type="tel" 
+                      required 
+                      pattern="[0-9]{10}" 
+                      maxLength={10} 
+                      minLength={10}
+                      value={manualRes.phone}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setManualRes(prev => ({ ...prev, phone: val }));
+                      }}
+                      className="w-full bg-darker border border-primary/20 pl-11 pr-4 py-3 text-secondary focus:outline-none focus:border-primary/50 transition-colors font-mono" 
+                      placeholder="10-digit number"
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -1676,6 +1691,12 @@ export default function Admin() {
                       className="bg-red-900/20 border border-red-500/30 text-red-400 p-4 uppercase tracking-widest text-sm hover:bg-red-900/40 transition-colors text-center font-normal"
                     >
                        Reached
+                    </button>
+                    <button 
+                      onClick={() => setClearType('History')}
+                      className="bg-red-900/20 border border-red-500/30 text-red-400 p-4 uppercase tracking-widest text-sm hover:bg-red-900/40 transition-colors text-center font-normal"
+                    >
+                       History (Completed/Cancelled)
                     </button>
                   </div>
                 </>
