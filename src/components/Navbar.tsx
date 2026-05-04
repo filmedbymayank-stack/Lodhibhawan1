@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Menu, X, Calendar } from 'lucide-react';
+import { Menu, X, Calendar, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { collection, onSnapshot, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -120,13 +120,15 @@ export default function Navbar() {
     
     const unsub = onSnapshot(collection(db, 'reservations'), (snapshot) => {
       const myRes: ReservationData[] = [];
+      const now = new Date();
+
       snapshot.docs.forEach(doc => {
         const data = doc.data() as ReservationData;
         
-        const isMyRes = myReservationIds.includes(data.id) || (virtualPhone && data.phone === virtualPhone);
+        const isMyRes = myReservationIds.includes(doc.id) || myReservationIds.includes(data.id) || (virtualPhone && data.phone === virtualPhone);
         
-        if (isMyRes && data.status !== 'Reached' && data.status !== 'Completed') {
-           myRes.push(data);
+        if (isMyRes) {
+            myRes.push(data);
            
            // Check for status changes to notify
            const prevStatus = prevReservationsRef.current[data.id];
@@ -247,36 +249,70 @@ const navLinks = [
                     <span>My Reservations</span>
                     {myReservations.length > 0 && <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">{myReservations.length}</span>}
                   </h4>
-                  <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                  <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
                     {myReservations.length === 0 ? (
                       <div className="py-2">
                         <p className="text-secondary/50 text-xs italic mb-4 text-center">No reservations found.</p>
                       </div>
                     ) : (
-                      myReservations.map(res => (
-                        <div key={res.id} className={`text-sm bg-dark p-3 border rounded-sm relative ${ res.status === 'Confirmed' ? 'border-[#8A9A5B]/30' : res.status === 'Completed' ? 'border-[#E6D7A3]/30' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'border-[#E2725B]/30' : res.status === 'Reached' ? 'border-[#CD7F32]/30' : res.status === 'SuggestedNewTime' ? 'border-[#FF9933]/30' : 'border-[#CCCCFF]/30' }`}>
-                          <div className={`absolute top-0 bottom-0 left-0 w-1 ${res.status === 'Confirmed' ? 'bg-[#8A9A5B]' : res.status === 'Completed' ? 'bg-[#E6D7A3]' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'bg-[#E2725B]' : res.status === 'Reached' ? 'bg-[#CD7F32]' : res.status === 'SuggestedNewTime' ? 'bg-[#FF9933]' : 'bg-[#CCCCFF]'}`}></div>
-                          <div className="ml-2">
-                             <div className="flex justify-between items-start">
-                               <p className="text-white font-medium">{res.name}</p>
-                               <span className="text-[10px] text-secondary/90 bg-darker px-1.5 py-0.5 rounded border border-primary/20 uppercase tracking-widest">{res.status === 'SuggestedNewTime' ? 'Suggested New Time' : res.status === 'DidntReach' ? "DIDN'T REACHED" : res.status}</span>
-                             </div>
-                             <p className="text-secondary/70 text-[11px] mt-1 font-mono">{res.phone}</p>
-                             <p className="text-secondary/70 text-xs mt-0.5">{new Date(res.datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'})}</p>
-                             <p className="text-xs text-secondary/60 mt-2 border-t border-primary/10 pt-2">{res.guests} Guests{res.tableNo ? ` | Table: ${res.tableNo}` : ''}</p>
-                             
-                             {res.status === 'SuggestedNewTime' && (
-                               <div className="mt-3 bg-[#FF9933]/10 border border-[#FF9933]/20 p-2 rounded-sm">
-                                 <p className="text-[11px] text-secondary/80 mb-2 leading-relaxed">Admin suggested a new time:<br/><span className="text-[#FF9933] font-mono">{res.suggestedDatetime ? new Date(res.suggestedDatetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'}) : 'No Time'}</span></p>
-                                 <div className="flex gap-2">
-                                    <button onClick={() => handleAcceptSuggestion(res)} className="flex-1 bg-[#FF9933]/20 text-[#FF9933] border border-[#FF9933]/30 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-[#FF9933]/30 font-bold">Accept</button>
-                                    <button onClick={() => { setRejectingRes(res); setRejectMode('options'); setShowReservations(false); }} className="flex-1 bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-red-500/20 font-bold">Reject</button>
-                                 </div>
-                               </div>
-                             )}
+                      <>
+                        {/* Upcoming Section */}
+                        {myReservations.filter(r => r.status !== 'Reached' && r.status !== 'Completed').length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-primary/50 font-bold mb-2">Upcoming</p>
+                            {myReservations
+                              .filter(r => r.status !== 'Reached' && r.status !== 'Completed')
+                              .map(res => (
+                                <div key={res.id} className={`text-sm bg-dark p-3 border rounded-sm relative ${ res.status === 'Confirmed' ? 'border-[#8A9A5B]/30' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'border-[#E2725B]/30' : res.status === 'SuggestedNewTime' ? 'border-[#FF9933]/30' : 'border-[#CCCCFF]/30' }`}>
+                                  <div className={`absolute top-0 bottom-0 left-0 w-1 ${ res.status === 'Confirmed' ? 'bg-[#8A9A5B]' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'bg-[#E2725B]' : res.status === 'SuggestedNewTime' ? 'bg-[#FF9933]' : 'bg-[#CCCCFF]'}`}></div>
+                                  <div className="ml-2">
+                                     <div className="flex justify-between items-start">
+                                       <p className="text-white font-medium">{res.name}</p>
+                                       <span className="text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-widest text-secondary/90 bg-darker border-primary/20">
+                                         {res.status === 'SuggestedNewTime' ? 'Suggested New Time' : res.status === 'DidntReach' || res.status === "DIDN'T REACHED" ? "DIDN'T REACHED" : res.status}
+                                       </span>
+                                     </div>
+                                     <p className="text-secondary/70 text-[11px] mt-1 font-mono flex items-center gap-0.5"><Plus size={10} className="text-secondary/40" />{res.phone}</p>
+                                     <p className="text-secondary/70 text-xs mt-0.5">{new Date(res.datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'})}</p>
+                                     <p className="text-xs text-secondary/60 mt-2 border-t border-primary/10 pt-2">{res.guests} Guests{res.tableNo ? ` | Table: ${res.tableNo}` : ''}</p>
+                                     
+                                     {res.status === 'SuggestedNewTime' && (
+                                       <div className="mt-3 bg-[#FF9933]/10 border border-[#FF9933]/20 p-2 rounded-sm">
+                                         <p className="text-[11px] text-secondary/80 mb-2 leading-relaxed">Admin suggested a new time:<br/><span className="text-[#FF9933] font-mono">{res.suggestedDatetime ? new Date(res.suggestedDatetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'}) : 'No Time'}</span></p>
+                                         <div className="flex gap-2">
+                                            <button onClick={() => handleAcceptSuggestion(res)} className="flex-1 bg-[#FF9933]/20 text-[#FF9933] border border-[#FF9933]/30 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-[#FF9933]/30 font-bold">Accept</button>
+                                            <button onClick={() => { setRejectingRes(res); setRejectMode('options'); setShowReservations(false); }} className="flex-1 bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-red-500/20 font-bold">Reject</button>
+                                         </div>
+                                       </div>
+                                     )}
+                                  </div>
+                                </div>
+                              ))}
                           </div>
-                        </div>
-                      ))
+                        )}
+
+                        {/* History Section */}
+                        {myReservations.filter(r => r.status === 'Reached' || r.status === 'Completed').length > 0 && (
+                          <div className="space-y-2 mt-4 text-left">
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-primary/50 font-bold mb-2">History / Reached</p>
+                            {myReservations
+                              .filter(r => r.status === 'Reached' || r.status === 'Completed')
+                              .map(res => (
+                                <div key={res.id} className={`text-sm bg-dark/40 p-3 border rounded-sm relative opacity-80 ${ res.status === 'Completed' ? 'border-[#E6D7A3]/30' : 'border-[#CD7F32]/30' }`}>
+                                  <div className={`absolute top-0 bottom-0 left-0 w-1 ${ res.status === 'Completed' ? 'bg-[#E6D7A3]' : 'bg-[#CD7F32]'}`}></div>
+                                  <div className="ml-2">
+                                     <div className="flex justify-between items-start">
+                                       <p className="text-white/70 font-medium">{res.name}</p>
+                                       <span className="text-[9px] text-secondary/60 bg-darker/50 px-1.5 py-0.5 rounded border border-primary/10 uppercase tracking-widest">{res.status === "DidntReach" || res.status === "DIDN'T REACHED" ? "DIDN'T REACHED" : res.status}</span>
+                                     </div>
+                                     <p className="text-secondary/50 text-[10px] mt-1 font-mono flex items-center gap-0.5"><Plus size={10} className="text-secondary/30" />{res.phone}</p>
+                                     <p className="text-secondary/50 text-[10px]">{new Date(res.datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'})}</p>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </motion.div>
@@ -317,36 +353,70 @@ const navLinks = [
                     <h4 className="text-secondary font-serif">My Reservations {myReservations.length > 0 && <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full ml-2">{myReservations.length}</span>}</h4>
                     <button onClick={() => setShowReservations(false)} className="text-secondary/50 hover:text-primary"><X size={18}/></button>
                   </div>
-                  <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                  <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
                     {myReservations.length === 0 ? (
                       <div className="py-2">
                         <p className="text-secondary/50 text-xs italic mb-4 text-center">No reservations found.</p>
                       </div>
                     ) : (
-                      myReservations.map(res => (
-                        <div key={res.id} className={`text-sm bg-dark p-3 border rounded-sm relative ${ res.status === 'Confirmed' ? 'border-[#8A9A5B]/30' : res.status === 'Completed' ? 'border-[#E6D7A3]/30' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'border-[#E2725B]/30' : res.status === 'Reached' ? 'border-[#CD7F32]/30' : res.status === 'SuggestedNewTime' ? 'border-[#FF9933]/30' : 'border-[#CCCCFF]/30' }`}>
-                          <div className={`absolute top-0 bottom-0 left-0 w-1 ${res.status === 'Confirmed' ? 'bg-[#8A9A5B]' : res.status === 'Completed' ? 'bg-[#E6D7A3]' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'bg-[#E2725B]' : res.status === 'Reached' ? 'bg-[#CD7F32]' : res.status === 'SuggestedNewTime' ? 'bg-[#FF9933]' : 'bg-[#CCCCFF]'}`}></div>
-                          <div className="ml-2">
-                             <div className="flex justify-between items-start">
-                               <p className="text-white font-medium">{res.name}</p>
-                               <span className="text-[10px] text-secondary/90 bg-darker px-1.5 py-0.5 rounded border border-primary/20 uppercase tracking-widest">{res.status === 'SuggestedNewTime' ? 'Suggested New Time' : res.status === 'DidntReach' ? "DIDN'T REACHED" : res.status}</span>
-                             </div>
-                             <p className="text-secondary/70 text-[11px] mt-1 font-mono">{res.phone}</p>
-                             <p className="text-secondary/70 text-xs mt-0.5">{new Date(res.datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'})}</p>
-                             <p className="text-xs text-secondary/60 mt-2 border-t border-primary/10 pt-2">{res.guests} Guests{res.tableNo ? ` | Table: ${res.tableNo}` : ''}</p>
-                             
-                             {res.status === 'SuggestedNewTime' && (
-                               <div className="mt-3 bg-[#FF9933]/10 border border-[#FF9933]/20 p-2 rounded-sm">
-                                 <p className="text-[11px] text-secondary/80 mb-2 leading-relaxed">Admin suggested a new time:<br/><span className="text-[#FF9933] font-mono">{res.suggestedDatetime ? new Date(res.suggestedDatetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'}) : 'No Time'}</span></p>
-                                 <div className="flex gap-2">
-                                    <button onClick={() => handleAcceptSuggestion(res)} className="flex-1 bg-[#FF9933]/20 text-[#FF9933] border border-[#FF9933]/30 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-[#FF9933]/30 font-bold">Accept</button>
-                                    <button onClick={() => { setRejectingRes(res); setRejectMode('options'); setShowReservations(false); setIsMobileMenuOpen(false); }} className="flex-1 bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-red-500/20 font-bold">Reject</button>
-                                 </div>
-                               </div>
-                             )}
+                      <>
+                        {/* Upcoming Section */}
+                        {myReservations.filter(r => r.status !== 'Reached' && r.status !== 'Completed').length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-primary/50 font-bold mb-2">Upcoming</p>
+                            {myReservations
+                              .filter(r => r.status !== 'Reached' && r.status !== 'Completed')
+                              .map(res => (
+                                <div key={res.id} className={`text-sm bg-dark p-3 border rounded-sm relative ${ res.status === 'Confirmed' ? 'border-[#8A9A5B]/30' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'border-[#E2725B]/30' : res.status === 'Reached' ? 'border-[#CD7F32]/30' : res.status === 'SuggestedNewTime' ? 'border-[#FF9933]/30' : 'border-[#CCCCFF]/30' }`}>
+                                  <div className={`absolute top-0 bottom-0 left-0 w-1 ${ res.status === 'Confirmed' ? 'bg-[#8A9A5B]' : res.status === 'Cancelled' || res.status === 'DidntReach' ? 'bg-[#E2725B]' : res.status === 'Reached' ? 'bg-[#CD7F32]' : res.status === 'SuggestedNewTime' ? 'bg-[#FF9933]' : 'bg-[#CCCCFF]'}`}></div>
+                                  <div className="ml-2">
+                                     <div className="flex justify-between items-start">
+                                       <p className="text-white font-medium">{res.name}</p>
+                                       <span className="text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-widest text-secondary/90 bg-darker border-primary/20">
+                                         {res.status === 'SuggestedNewTime' ? 'Suggested New Time' : res.status === "DidntReach" || res.status === "DIDN'T REACHED" ? "DIDN'T REACHED" : res.status}
+                                       </span>
+                                     </div>
+                                     <p className="text-secondary/70 text-[11px] mt-1 font-mono flex items-center gap-0.5"><Plus size={10} className="text-secondary/40" />{res.phone}</p>
+                                     <p className="text-secondary/70 text-xs mt-0.5">{new Date(res.datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'})}</p>
+                                     <p className="text-xs text-secondary/60 mt-2 border-t border-primary/10 pt-2">{res.guests} Guests{res.tableNo ? ` | Table: ${res.tableNo}` : ''}</p>
+                                     
+                                     {res.status === 'SuggestedNewTime' && (
+                                       <div className="mt-3 bg-[#FF9933]/10 border border-[#FF9933]/20 p-2 rounded-sm">
+                                         <p className="text-[11px] text-secondary/80 mb-2 leading-relaxed">Admin suggested a new time:<br/><span className="text-[#FF9933] font-mono">{res.suggestedDatetime ? new Date(res.suggestedDatetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'}) : 'No Time'}</span></p>
+                                         <div className="flex gap-2">
+                                            <button onClick={() => handleAcceptSuggestion(res)} className="flex-1 bg-[#FF9933]/20 text-[#FF9933] border border-[#FF9933]/30 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-[#FF9933]/30 font-bold">Accept</button>
+                                            <button onClick={() => { setRejectingRes(res); setRejectMode('options'); setShowReservations(false); setIsMobileMenuOpen(false); }} className="flex-1 bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-1 text-[10px] uppercase tracking-widest hover:bg-red-500/20 font-bold">Reject</button>
+                                         </div>
+                                       </div>
+                                     )}
+                                  </div>
+                                </div>
+                              ))}
                           </div>
-                        </div>
-                      ))
+                        )}
+
+                        {/* History Section */}
+                        {myReservations.filter(r => r.status === 'Reached' || r.status === 'Completed').length > 0 && (
+                          <div className="space-y-2 mt-4 text-left">
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-primary/50 font-bold mb-2">History / Reached</p>
+                            {myReservations
+                              .filter(r => r.status === 'Reached' || r.status === 'Completed')
+                              .map(res => (
+                                <div key={res.id} className={`text-sm bg-dark/40 p-3 border rounded-sm relative opacity-80 ${ res.status === 'Completed' ? 'border-[#E6D7A3]/30' : 'border-[#CD7F32]/30' }`}>
+                                  <div className={`absolute top-0 bottom-0 left-0 w-1 ${ res.status === 'Completed' ? 'bg-[#E6D7A3]' : 'bg-[#CD7F32]'}`}></div>
+                                  <div className="ml-2">
+                                     <div className="flex justify-between items-start">
+                                       <p className="text-white/70 font-medium">{res.name}</p>
+                                       <span className="text-[9px] text-secondary/60 bg-darker/50 px-1.5 py-0.5 rounded border border-primary/10 uppercase tracking-widest">{res.status === "DidntReach" || res.status === "DIDN'T REACHED" ? "DIDN'T REACHED" : res.status}</span>
+                                     </div>
+                                     <p className="text-secondary/50 text-[10px] mt-1 font-mono flex items-center gap-0.5"><Plus size={10} className="text-secondary/30" />{res.phone}</p>
+                                     <p className="text-secondary/50 text-[10px]">{new Date(res.datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'})}</p>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </motion.div>

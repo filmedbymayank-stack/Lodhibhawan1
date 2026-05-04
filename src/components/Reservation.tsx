@@ -30,6 +30,15 @@ export default function Reservation() {
 
     setIsSubmitting(true);
 
+    const selectedTime = new Date(datetime).getTime();
+    const minAdvanceTime = Date.now() + 15 * 60000;
+    
+    if (selectedTime < minAdvanceTime) {
+      setError("Advance booking is required. Please select a time at least 15 minutes from now.");
+      setIsSubmitting(false);
+      return;
+    }
+
     const reservationId = Date.now().toString();
     const newReservation: ReservationData = {
       id: reservationId,
@@ -169,14 +178,24 @@ export default function Reservation() {
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-widest text-secondary/60">Phone</label>
-                <input 
-                  type="tel" 
-                  required
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  className="w-full bg-transparent border-b border-secondary/30 py-2 text-secondary focus:outline-none focus:border-primary transition-colors" 
-                  placeholder="Your Phone Number" 
-                />
+                <div className="relative">
+                  <span className="absolute left-0 bottom-2 text-secondary/60 font-mono">+91 </span>
+                  <input 
+                    type="tel" 
+                    required
+                    value={formData.phone}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setFormData({...formData, phone: val})
+                    }}
+                    pattern="[0-9]{10}"
+                    maxLength={10}
+                    minLength={10}
+                    title="Please enter exactly 10 digits"
+                    className="w-full bg-transparent border-b border-secondary/30 py-2 pl-10 text-secondary focus:outline-none focus:border-primary transition-colors font-mono" 
+                    placeholder="10-digit Number" 
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-xs uppercase tracking-widest text-secondary/60">Guests</label>
@@ -201,6 +220,7 @@ export default function Reservation() {
                 <label className="text-xs uppercase tracking-widest text-secondary/60">Date & Time</label>
                 <input 
                   type="datetime-local" required
+                  min={minDateTimePickerValue}
                   value={formData.datetime}
                   onChange={(e) => setFormData({...formData, datetime: e.target.value})}
                   className="w-full bg-transparent border-b border-secondary/30 py-2 text-secondary focus:outline-none focus:border-primary transition-colors [color-scheme:dark]" 
