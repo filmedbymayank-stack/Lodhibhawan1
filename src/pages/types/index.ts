@@ -7,6 +7,7 @@ export interface ReservationData {
   status: 'Pending' | 'Confirmed' | 'Cancelled' | 'Reached' | 'DidntReach' | 'Completed' | 'Ongoing' | 'SuggestedNewTime';
   tableNo?: string;
   suggestedDatetime?: string;
+  rejectReason?: string;
   createdAt: string;
   paymentDoneAt?: string;
 }
