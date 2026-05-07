@@ -11,6 +11,7 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [myReservations, setMyReservations] = useState<ReservationData[]>([]);
   const prevReservationsRef = useRef<Record<string, string>>({});
+  const unsubscribeRef = useRef<(() => void) | null>(null);
   const [showReservations, setShowReservations] = useState(false);
   
   const handleAcceptSuggestion = async (res: ReservationData) => {
@@ -109,45 +110,82 @@ export default function Navbar() {
     return () => window.removeEventListener('reservationUpdated', updateLocalReservations);
   }, []);
 
-  const [unsubscribeFn, setUnsubscribeFn] = useState<(() => void) | null>(null);
-
   const setupFirestoreListener = (myReservationIds: string[]) => {
-    if (unsubscribeFn) {
-      unsubscribeFn();
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+    }
+    
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
     }
     
     const virtualPhone = localStorage.getItem('virtualAccountPhone');
     
     const unsub = onSnapshot(collection(db, 'reservations'), (snapshot) => {
       const myRes: ReservationData[] = [];
-      const now = new Date();
+      
+      const currentLastSeenStr = localStorage.getItem('lastSeenStatuses');
+      const currentLastSeen = currentLastSeenStr ? JSON.parse(currentLastSeenStr) : {};
+      const newLastSeen = { ...currentLastSeen };
 
       snapshot.docs.forEach(doc => {
         const data = doc.data() as ReservationData;
-        
         const isMyRes = myReservationIds.includes(doc.id) || myReservationIds.includes(data.id) || (virtualPhone && data.phone === virtualPhone);
         
         if (isMyRes) {
             myRes.push(data);
            
-           // Check for status changes to notify
-           const prevStatus = prevReservationsRef.current[data.id];
-           if (prevStatus && prevStatus !== data.status) {
-              if ('Notification' in window && Notification.permission === 'granted') {
-                 new Notification('Lodhi Bhawan Updates', {
-                    body: `Your reservation status updated to: ${data.status === 'SuggestedNewTime' ? 'Admin Suggested New Time' : data.status}`,
-                 });
+            const lastSeenStatus = currentLastSeen[data.id];
+            const prevStatus = prevReservationsRef.current[data.id];
+            
+            let statusChanged = false;
+
+            if (prevStatus && prevStatus !== data.status) {
+                // Real-time change while user is on the site
+                statusChanged = true;
+                try {
+                  if ('Notification' in window && Notification.permission === 'granted') {
+                    if (navigator.serviceWorker) {
+                      navigator.serviceWorker.ready.then((registration) => {
+                        registration.showNotification('Lodhi Bhawan Updates', {
+                          body: `Your reservation status updated to: ${data.status === 'SuggestedNewTime' ? 'Admin Suggested New Time' : data.status}`,
+                          icon: '/logo3.png',
+                          vibrate: [200, 100, 200]
+                        } as any);
+                      });
+                    } else {
+                      new Notification('Lodhi Bhawan Updates', {
+                        body: `Your reservation status updated to: ${data.status === 'SuggestedNewTime' ? 'Admin Suggested New Time' : data.status}`,
+                        icon: '/logo3.png'
+                      });
+                    }
+                  }
+                } catch (e) { console.error('Notification error', e); }
+            } else if (!prevStatus && lastSeenStatus && lastSeenStatus !== data.status) {
+                // Changed while user was offline/away
+                statusChanged = true;
+            }
+
+            if (statusChanged) {
+              if (data.status === 'Confirmed') {
+                window.dispatchEvent(new CustomEvent('reservationPopup', { detail: 'Your Reservation has been Confirmed.' }));
+              } else if (data.status === 'Cancelled') {
+                window.dispatchEvent(new CustomEvent('reservationPopup', { detail: `Your reservation has been Cancelled${data.rejectReason ? ` due to: ${data.rejectReason}` : '.'}` }));
               }
-           }
-           prevReservationsRef.current[data.id] = data.status;
+            }
+           
+            prevReservationsRef.current[data.id] = data.status;
+            newLastSeen[data.id] = data.status;
         }
       });
-      // Sort to show ascending by date
-      setMyReservations(myRes.sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime()));
+      
+      localStorage.setItem('lastSeenStatuses', JSON.stringify(newLastSeen));
+      setMyReservations([...myRes].sort((a, b) => new Date(a.datetime).getTime() - new Date(b.datetime).getTime()));
     }, (error) => {
       console.log('Error listening to reservations', error);
     });
-    setUnsubscribeFn(() => unsub);
+    
+    unsubscribeRef.current = unsub;
   };
     
 const navLinks = [
@@ -276,6 +314,13 @@ const navLinks = [
                                      <p className="text-secondary/70 text-xs mt-0.5">{new Date(res.datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'})}</p>
                                      <p className="text-xs text-secondary/60 mt-2 border-t border-primary/10 pt-2">{res.guests} Guests{res.tableNo ? ` | Table: ${res.tableNo}` : ''}</p>
                                      
+                                     {res.status === 'Cancelled' && res.rejectReason && (
+                                       <div className="mt-3 bg-red-900/20 border border-red-500/20 p-2 rounded-sm">
+                                         <p className="text-[10px] text-red-400 mb-1 font-bold uppercase tracking-widest">Reason for Cancellation:</p>
+                                         <p className="text-[11px] text-red-300/80 leading-relaxed">{res.rejectReason}</p>
+                                       </div>
+                                     )}
+                                     
                                      {res.status === 'SuggestedNewTime' && (
                                        <div className="mt-3 bg-[#FF9933]/10 border border-[#FF9933]/20 p-2 rounded-sm">
                                          <p className="text-[11px] text-secondary/80 mb-2 leading-relaxed">Admin suggested a new time:<br/><span className="text-[#FF9933] font-mono">{res.suggestedDatetime ? new Date(res.suggestedDatetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'}) : 'No Time'}</span></p>
@@ -379,6 +424,13 @@ const navLinks = [
                                      <p className="text-secondary/70 text-[11px] mt-1 font-mono flex items-center gap-0.5"><Plus size={10} className="text-secondary/40" />{res.phone}</p>
                                      <p className="text-secondary/70 text-xs mt-0.5">{new Date(res.datetime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short'})}</p>
                                      <p className="text-xs text-secondary/60 mt-2 border-t border-primary/10 pt-2">{res.guests} Guests{res.tableNo ? ` | Table: ${res.tableNo}` : ''}</p>
+                                     
+                                     {res.status === 'Cancelled' && res.rejectReason && (
+                                       <div className="mt-3 bg-red-900/20 border border-red-500/20 p-2 rounded-sm">
+                                         <p className="text-[10px] text-red-400 mb-1 font-bold uppercase tracking-widest">Reason for Cancellation:</p>
+                                         <p className="text-[11px] text-red-300/80 leading-relaxed">{res.rejectReason}</p>
+                                       </div>
+                                     )}
                                      
                                      {res.status === 'SuggestedNewTime' && (
                                        <div className="mt-3 bg-[#FF9933]/10 border border-[#FF9933]/20 p-2 rounded-sm">
