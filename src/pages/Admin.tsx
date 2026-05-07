@@ -8,6 +8,7 @@ import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User as Fireba
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 // 3 simple tables on left, 2 sofa right, 1 simple right
 const TABLES = [
@@ -104,6 +105,10 @@ export default function Admin() {
   
   // View Table state
   const [viewTableDetailsId, setViewTableDetailsId] = useState<string | null>(null);
+
+  // Export Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFilterType, setExportFilterType] = useState<'All' | 'Upcoming' | 'Reached' | null>(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [manualRes, setManualRes] = useState({ name: '', phone: '', guests: 1, datetime: '' });
@@ -213,14 +218,18 @@ export default function Admin() {
   };
 
   const handleDownloadData = (filterType: 'All' | 'Upcoming' | 'Reached') => {
-    const doc = new jsPDF();
-    doc.text(`Lodhi Bhawan - ${filterType} Reservations Data`, 14, 20);
+    setExportFilterType(filterType);
+    setShowExportModal(true);
+  };
+
+  const executeExport = (format: 'pdf' | 'excel') => {
+    if (!exportFilterType) return;
     
     let filteredRes = [...reservations];
     
-    if (filterType === 'Upcoming') {
+    if (exportFilterType === 'Upcoming') {
       filteredRes = reservations.filter(r => r.status === 'Confirmed' && !r.tableNo);
-    } else if (filterType === 'Reached') {
+    } else if (exportFilterType === 'Reached') {
       filteredRes = reservations.filter(r => r.status === 'Reached' || (r.status === 'Confirmed' && r.tableNo));
     }
 
@@ -243,17 +252,49 @@ export default function Admin() {
       tableRows.push(resData);
     });
 
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      startY: 30,
-      theme: 'grid',
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [40, 40, 40] }
-    });
-
     const dateStr = new Date().toISOString().split('T')[0];
-    doc.save(`Lodhi_Bhawan_${filterType}_Reservations_${dateStr}.pdf`);
+    const fileNameBase = `Lodhi_Bhawan_${exportFilterType}_Reservations_${dateStr}`;
+
+    if (format === 'pdf') {
+      const doc = new jsPDF();
+      doc.text(`Lodhi Bhawan - ${exportFilterType} Reservations Data`, 14, 20);
+      
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 30,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [40, 40, 40] }
+      });
+
+      doc.save(`${fileNameBase}.pdf`);
+    } else if (format === 'excel') {
+      // Create worksheet
+      const wsData = [tableColumn, ...tableRows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      
+      // Auto-size columns slightly
+      const wscols = [
+        {wch: 25}, // Date & Time
+        {wch: 20}, // Name
+        {wch: 15}, // Phone
+        {wch: 10}, // Guests
+        {wch: 10}, // Table No
+        {wch: 20}  // Status
+      ];
+      ws['!cols'] = wscols;
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Reservations");
+
+      // Save file
+      XLSX.writeFile(wb, `${fileNameBase}.xlsx`);
+    }
+    
+    setShowExportModal(false);
+    setExportFilterType(null);
   };
 
   const initAllocation = (res: ReservationData) => {
@@ -350,6 +391,7 @@ export default function Admin() {
 
     updateReservationStatus(selectedResReject.id, { 
       status: 'Cancelled',
+      rejectReason: rejectReason
     });
 
     setSelectedResReject(null);
@@ -736,24 +778,31 @@ export default function Admin() {
                       
                       <div className="flex flex-col w-full pl-3 pr-4 py-2 gap-0.5">
                         <div className="flex justify-between items-center w-full">
-                          <span className="text-xl font-medium text-white whitespace-nowrap overflow-hidden text-ellipsis">{res.name} {res.guests && <span className="text-secondary/60">({res.guests}p)</span>}</span>
-                          <span className="text-[15px] text-secondary/80 whitespace-nowrap font-mono">{new Date(res.datetime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        <div className="flex justify-between items-center w-full">
-                          <span className="text-[15px] text-secondary/60 whitespace-nowrap font-mono flex items-center"><Plus size={12} className="text-secondary/40 mr-0.5" />{res.phone}</span>
-                          <span className="text-[15px] text-secondary/60 whitespace-nowrap">{new Date(res.datetime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year:'numeric' })}</span>
-                        </div>
-                        <div className="flex flex-row justify-between items-center w-full mt-2 pt-2 border-t border-primary/10">
-                          <span className={`text-[11px] uppercase tracking-widest px-1.5 py-0.5 rounded-sm font-normal border ${
-                            res.status === 'Confirmed' ? 'bg-[#8A9A5B]/10 text-[#8A9A5B] border-[#8A9A5B]/20' : 
-                            res.status === 'Completed' ? 'bg-[#E6D7A3]/10 text-[#E6D7A3] border-[#E6D7A3]/20' :
-                            res.status === 'Cancelled' || res.status === 'DidntReach' ? 'bg-[#E2725B]/10 text-[#E2725B] border-[#E2725B]/20' :
-                            res.status === 'Reached' ? 'bg-[#CD7F32]/10 text-[#CD7F32] border-[#CD7F32]/20' :
-                            res.status === 'SuggestedNewTime' ? 'bg-[#F4C430]/10 text-[#F4C430] border-[#F4C430]/20' :
-                            'bg-[#CCCCFF]/10 text-[#CCCCFF] border-[#CCCCFF]/20'
-                          }`}>
-                            {res.status === 'SuggestedNewTime' ? 'Suggested New Time' : res.status === 'DidntReach' ? "DIDN'T REACHED" : res.status}
-                          </span>
+                          <div className="flex flex-col items-start gap-1 w-full">
+                            <div className="flex justify-between items-center w-full">
+                              <span className="text-xl font-medium text-white whitespace-nowrap overflow-hidden text-ellipsis flex items-center">
+                                {res.name} {res.guests && <span className="text-xs font-normal text-secondary/60 ml-2">({res.guests}p)</span>} <span className="text-xs text-secondary/60 font-mono ml-2">: {res.phone}</span>
+                              </span>
+                              <span className="text-xl text-secondary/80 whitespace-nowrap font-mono ml-4 font-medium">
+                                {new Date(res.datetime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center w-full mt-2 pt-2 border-t border-primary/10">
+                              <span className={`text-[10px] uppercase tracking-[0.2em] px-2 py-0.5 rounded-sm font-bold border ${
+                                res.status === 'Confirmed' ? 'bg-[#8A9A5B]/10 text-[#8A9A5B] border-[#8A9A5B]/20' : 
+                                res.status === 'Completed' ? 'bg-[#E6D7A3]/10 text-[#E6D7A3] border-[#E6D7A3]/20' :
+                                res.status === 'Cancelled' || res.status === 'DidntReach' ? 'bg-[#E2725B]/10 text-[#E2725B] border-[#E2725B]/20' :
+                                res.status === 'Reached' ? 'bg-[#CD7F32]/10 text-[#CD7F32] border-[#CD7F32]/20' :
+                                res.status === 'SuggestedNewTime' ? 'bg-[#F4C430]/10 text-[#F4C430] border-[#F4C430]/20' :
+                                'bg-[#CCCCFF]/10 text-[#CCCCFF] border-[#CCCCFF]/20'
+                              }`}>
+                                {res.status === 'SuggestedNewTime' ? 'Suggested New Time' : res.status === 'DidntReach' ? "DIDN'T REACHED" : res.status}
+                              </span>
+                              <span className="text-xs text-secondary/50 whitespace-nowrap uppercase tracking-widest font-normal">
+                                {new Date(res.datetime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year:'numeric' })}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -858,18 +907,27 @@ export default function Admin() {
                         
                         <div className="flex flex-col w-full pl-3 pr-4 py-2 gap-0.5">
                           <div className="flex justify-between items-center w-full">
-                            <span className="text-xl font-medium text-white whitespace-nowrap overflow-hidden text-ellipsis">{res.name} {res.guests && <span className="text-secondary/60">({res.guests}p)</span>}</span>
-                            <span className="text-[15px] text-secondary/80 whitespace-nowrap font-mono">{new Date(res.datetime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                          <div className="flex justify-between items-center w-full">
-                            <span className="text-[15px] text-secondary/60 whitespace-nowrap font-mono flex items-center"><Plus size={12} className="text-secondary/40 mr-0.5" />{res.phone}</span>
-                            <span className="text-[15px] text-secondary/60 whitespace-nowrap">{new Date(res.datetime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year:'numeric' })}</span>
+                            <div className="flex flex-col items-start gap-1 w-full">
+                              <div className="flex justify-between items-center w-full">
+                                <span className="text-xl font-medium text-white whitespace-nowrap overflow-hidden text-ellipsis flex items-center">
+                                  {res.name} {res.guests && <span className="text-xs font-normal text-secondary/60 ml-2">({res.guests}p)</span>} <span className="text-xs text-secondary/60 font-mono ml-2">: {res.phone}</span>
+                                </span>
+                                <span className="text-xl text-secondary/80 whitespace-nowrap font-mono ml-4 font-medium">
+                                  {new Date(res.datetime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center w-full mt-2 pt-2 border-t border-primary/10">
+                                <span className={`text-[10px] uppercase tracking-[0.2em] px-2 py-0.5 rounded-sm font-bold border ${flagColor}`}>
+                                  {res.status === 'SuggestedNewTime' && res.suggestedDatetime ? `Suggested - ${new Date(res.suggestedDatetime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}` : `${res.status === 'DidntReach' ? "DIDN'T REACHED" : res.status}`}
+                                </span>
+                                <span className="text-xs text-secondary/50 whitespace-nowrap uppercase tracking-widest font-normal">
+                                  {new Date(res.datetime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year:'numeric' })}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                           
-                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full mt-2 pt-2 border-t border-primary/10 gap-2">
-                            <span className={`text-[11px] uppercase tracking-widest px-1.5 py-0.5 rounded-sm font-normal border ${flagColor}`}>
-                              {res.status === 'SuggestedNewTime' && res.suggestedDatetime ? `Suggested - ${new Date(res.suggestedDatetime).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}` : `${res.status === 'DidntReach' ? "DIDN'T REACHED" : res.status}`}
-                            </span>
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full mt-2 gap-2">
                             
                             <div className="flex flex-wrap gap-2 w-full sm:w-auto mt-2 sm:mt-0 justify-end">
                               {res.tableNo ? (
@@ -974,25 +1032,34 @@ export default function Admin() {
                       
                       <div className="flex flex-col w-full pl-3 pr-4 py-2 gap-0.5">
                         <div className="flex justify-between items-center w-full">
-                          <span className="text-xl font-medium text-white whitespace-nowrap overflow-hidden text-ellipsis">{res.name} {res.guests && <span className="text-secondary/60">({res.guests}p)</span>} {res.tableNo && <span className="text-primary font-medium pl-1">T:{res.tableNo}</span>}</span>
-                          <span className="text-[15px] text-secondary/80 whitespace-nowrap font-mono">{new Date(res.datetime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        <div className="flex justify-between items-center w-full">
-                          <span className="text-[15px] text-secondary/60 whitespace-nowrap font-mono flex items-center"><Plus size={12} className="text-secondary/40 mr-0.5" />{res.phone}</span>
-                          <span className="text-[15px] text-secondary/60 whitespace-nowrap">{new Date(res.datetime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year:'numeric' })}</span>
+                          <div className="flex flex-col items-start gap-1 w-full">
+                            <div className="flex justify-between items-center w-full">
+                              <span className="text-xl font-medium text-white whitespace-nowrap overflow-hidden text-ellipsis flex items-center">
+                                {res.name} {res.guests && <span className="text-xs font-normal text-secondary/60 ml-2">({res.guests}p)</span>} {res.tableNo && <span className="text-primary text-xs font-medium pl-1">T:{res.tableNo}</span>} <span className="text-xs text-secondary/60 font-mono ml-2">: {res.phone}</span>
+                              </span>
+                              <span className="text-xl text-secondary/80 whitespace-nowrap font-mono ml-4 font-medium">
+                                {new Date(res.datetime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center w-full mt-2 pt-2 border-t border-primary/10">
+                              <span className={`text-[10px] uppercase tracking-[0.2em] px-2 py-0.5 rounded-sm font-bold border ${
+                                res.status === 'Confirmed' ? 'bg-[#8A9A5B]/10 text-[#8A9A5B] border-[#8A9A5B]/20' : 
+                                res.status === 'Completed' ? 'bg-[#E6D7A3]/10 text-[#E6D7A3] border-[#E6D7A3]/20' :
+                                res.status === 'Cancelled' || res.status === 'DidntReach' ? 'bg-[#E2725B]/10 text-[#E2725B] border-[#E2725B]/20' :
+                                res.status === 'Reached' ? 'bg-[#CD7F32]/10 text-[#CD7F32] border-[#CD7F32]/20' :
+                                res.status === 'SuggestedNewTime' ? 'bg-[#F4C430]/10 text-[#F4C430] border-[#F4C430]/20' :
+                                'bg-[#CCCCFF]/10 text-[#CCCCFF] border-[#CCCCFF]/20'
+                              }`}>
+                                {res.status === 'SuggestedNewTime' ? 'Suggested New Time' : res.status === 'DidntReach' ? "DIDN'T REACHED" : res.status}
+                              </span>
+                              <span className="text-xs text-secondary/50 whitespace-nowrap uppercase tracking-widest font-normal">
+                                {new Date(res.datetime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year:'numeric' })}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                         
                         <div className="flex flex-row justify-between items-center w-full mt-2 pt-2 border-t border-primary/10">
-                          <span className={`text-[11px] uppercase tracking-widest px-1.5 py-0.5 rounded-sm font-normal border ${
-                            res.status === 'Confirmed' ? 'bg-[#8A9A5B]/10 text-[#8A9A5B] border-[#8A9A5B]/20' : 
-                            res.status === 'Completed' ? 'bg-[#E6D7A3]/10 text-[#E6D7A3] border-[#E6D7A3]/20' :
-                            res.status === 'Cancelled' || res.status === 'DidntReach' ? 'bg-[#E2725B]/10 text-[#E2725B] border-[#E2725B]/20' :
-                            res.status === 'Reached' ? 'bg-[#CD7F32]/10 text-[#CD7F32] border-[#CD7F32]/20' :
-                            res.status === 'SuggestedNewTime' ? 'bg-[#F4C430]/10 text-[#F4C430] border-[#F4C430]/20' :
-                            'bg-[#CCCCFF]/10 text-[#CCCCFF] border-[#CCCCFF]/20'
-                          }`}>
-                            {res.status === 'SuggestedNewTime' ? 'Suggested New Time' : res.status === 'DidntReach' ? "DIDN'T REACHED" : res.status}
-                          </span>
                           
                           <div className="flex gap-2 relative flex-wrap justify-end">
                             {(res.status === 'Reached' || res.status === 'Ongoing') && (
@@ -1167,6 +1234,44 @@ export default function Admin() {
           )}
         </div>
       </main>
+
+      <AnimatePresence>
+        {showExportModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <div className="bg-dark border border-primary/20 p-6 max-w-sm w-full shadow-2xl relative">
+              <button 
+                onClick={() => { setShowExportModal(false); setExportFilterType(null); }}
+                className="absolute right-4 top-4 text-secondary/40 hover:text-primary transition-colors"
+              >
+                <X size={20} />
+              </button>
+              
+              <h3 className="text-xl font-serif text-primary mb-2">Export Selection</h3>
+              <p className="text-secondary/60 text-sm mb-6">Choose an export format for "{exportFilterType}" data.</p>
+              
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => executeExport('pdf')}
+                  className="w-full py-4 px-4 bg-red-900/10 hover:bg-red-900/30 text-red-400 border border-red-900/30 font-medium tracking-widest text-sm uppercase transition-colors"
+                >
+                  Export as PDF
+                </button>
+                <button
+                  onClick={() => executeExport('excel')}
+                  className="w-full py-4 px-4 bg-green-900/10 hover:bg-green-900/30 text-green-400 border border-green-900/30 font-medium tracking-widest text-sm uppercase transition-colors"
+                >
+                  Export as EXCEL
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Manual Add Reservation Modal */}
       <AnimatePresence>
